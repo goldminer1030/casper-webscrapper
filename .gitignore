@@ -172,5 +172,4 @@ $RECYCLE.BIN/
 dist/
 
 headers.json
-second.png
-final.png
+*.png
