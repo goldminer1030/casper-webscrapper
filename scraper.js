@@ -5,7 +5,7 @@ var fs = require('fs'),
     isAnyErrorOccurred = false,
     api_url = "http://azcaptcha.com",
     api_key = "",
-    captcha_selector = "#continueBtn",
+    captcha_selector = "#div-captcha img:first-child",
     page = require("webpage").create(),
     settings = {
       operation: "POST",
@@ -73,7 +73,7 @@ function sendActivateCode() {
 
 function send_activecode_with_captcha(captcha_text) {
   // Form input
-  casper.waitForSelector("form input#simnumber", function () {
+  casper.waitForSelector("form input#captcha", function () {
     this.fillSelectors('form[name="activateGophnDeviceFrm"]', {
       'input#captcha': captcha_text,
     }, true);
