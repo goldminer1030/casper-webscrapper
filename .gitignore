@@ -173,3 +173,5 @@ dist/
 
 headers.json
 *.png
+*.jpg
+*.jpeg

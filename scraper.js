@@ -1,26 +1,11 @@
 var fs = require('fs'),
-    casper = require("casper").create(),
-    mouse = require("mouse").create(casper),
+    casper = require("casper").create({
+      exitOnError: false
+    }),
     isCaptchaNeeded = false,
     isAnyErrorOccurred = false,
     api_url = "http://azcaptcha.com",
     api_key = "",
-    captcha_selector = "#div-captcha img:first-child",
-    page = require("webpage").create(),
-    settings = {
-      operation: "POST",
-      encoding: "utf8",
-      headers: {
-          "Content-Type": "application/json",
-          "X-Requested-By": "MYATT"
-      },
-      data: JSON.stringify({
-        "CommonData": {
-          "AppName": "PREPAID_ACTIVATION"
-        },
-        "app": "prepaid"
-      })
-    },
     listener = function (resource, request) {
       if (resource.url == 'https://www.att.com/prepaid/activations/services/resources/unauth/activation/inquireDeviceProfileDetails') {
         fs.write('headers.json', JSON.stringify(resource.headers), 'w');
@@ -31,20 +16,6 @@ var fs = require('fs'),
       isAnyErrorOccurred = true;
       this.echo("Resource error: " + "Error code: " + resourceError.errorCode + " ErrorString: " + resourceError.errorString + " url: " + resourceError.url + " id: " + resourceError.id, "ERROR");
     },
-    captcha_in_request = {
-      operation: "POST",
-      encoding: "utf8",
-      headers: {
-        "Content-Type": "application/json"
-      }
-    },
-    captcha_res_request = {
-      operation: "POST",
-      encoding: "utf8",
-      headers: {
-        "Content-Type": "application/json"
-      }
-    },
     simNumber = '89014102255039698818',
     imeiNumber = '359405084715737',
     serviceZip = '90210';
@@ -52,21 +23,19 @@ var fs = require('fs'),
 function sendActivateCode() {
   // Click continue button
   casper.then(function () {
-    if (casper.exists('#continueBtn')) {
-      this.captureSelector('continue-button.png', '#continueBtn');
-      this.echo(this.captureBase64('png', '#continueBtn'));
-
-      casper.click('#continueBtn');
+    if (this.exists('#continueBtn')) {
+      this.click('#continueBtn');
       this.echo('click continue button');
     } else {
       this.echo('Could not find the continue button');
     }
   });
-  // Wait
-  casper.wait(5000);
   // Capture the screen
   casper.then(function () {
-    casper.capture('final.png');
+    // Wait
+    this.wait(5000);
+
+    this.capture('final.jpg');
     this.echo('capture final screen');
   });
 }
@@ -83,13 +52,31 @@ function send_activecode_with_captcha(captcha_text) {
   sendActivateCode();
 }
 
+// Initialize casper
+casper.userAgent('Mozilla/5.0 (compatible; MSIE 6.0; Windows NT 5.1)');
+// listening to all resources requests
+casper.on("resource.requested", listener);
+// listening to all errors
+casper.on("resource.error", errorListener);
+
+// Start casper
+casper.start();
 // Check if captcher is required
-page.open('https://www.att.com/prepaid/activations/services/resources/acceptance/captcha/isCaptchaNeeded', settings, function (status) {
-  if (status !== 'success') {
-    this.echo('page not opening');
-    isAnyErrorOccurred = true;
-  } else {
-    var resultObject = JSON.parse(page.plainText);
+casper.open('https://www.att.com/prepaid/activations/services/resources/acceptance/captcha/isCaptchaNeeded', {
+  method: 'post',
+  headers: {
+    "Content-Type": "application/json",
+    "X-Requested-By": "MYATT"
+  },
+  data: JSON.stringify({
+    "CommonData": {
+      "AppName": "PREPAID_ACTIVATION"
+    },
+    "app": "prepaid"
+  })
+}).then(function (response) {
+  if (response.status == 200) {
+    var resultObject = JSON.parse(this.page.plainText);
     this.echo("Getting response from the server:");
     if (resultObject['Result']['Status'] == 'SUCCESS') {
       this.echo('SUCCESS');
@@ -98,64 +85,87 @@ page.open('https://www.att.com/prepaid/activations/services/resources/acceptance
       this.echo('FAILED');
     }
     this.echo('isCaptchaNeeded: ' + isCaptchaNeeded);
+  } else {
+    this.echo('page not opening');
+    isAnyErrorOccurred = true;
   }
 });
 
-// Initialize casper
-casper.userAgent('Mozilla/5.0 (compatible; MSIE 6.0; Windows NT 5.1)');
-// listening to all resources requests
-casper.on("resource.requested", listener);
-// listening to all errors
-casper.on("resource.error", errorListener);
-
 // load the start page
-casper.start('https://www.att.com/prepaid/activations/#/activate.html', function () {
+casper.thenOpen('https://www.att.com/prepaid/activations/#/activate.html', function () {
   this.echo(this.getTitle());
 });
-// Form input
-casper.waitForSelector("form input#simnumber", function () {
-  this.fillSelectors('form[name="activateGophnDeviceFrm"]', {
-    'input#simnumber': simNumber,
-    'input#imeinumber': imeiNumber,
-    'input#servicezip': serviceZip
-  }, true);
-});
-// Capture screen
+
 casper.then(function () {
-  casper.capture('second.png');
+  // Form input
+  this.waitForSelector("form input#simnumber", function () {
+    this.fillSelectors('form[name="activateGophnDeviceFrm"]', {
+      'input#simnumber': simNumber,
+      'input#imeinumber': imeiNumber,
+      'input#servicezip': serviceZip
+    }, true);
+  });
+  // Capture screen
+  this.capture('second.jpg');
   this.echo('capture second screen');
+  // Wait
+  this.wait(2500);
 });
-// Wait
-casper.wait(500);
 
-if(!isAnyErrorOccurred) {
-  if(isCaptchaNeeded) {
-    this.echo('--- ALERT! CAPTCHA is requested ---');
-    // If captcha is needed
-    if (casper.exists(captcha_selector)) {
-      // If captcha image is available
-      var base64 = this.captureBase64('png', captcha_selector);
+casper.then(function() {
+  if (!isAnyErrorOccurred) {
+    this.echo('captcha? ' + isCaptchaNeeded);
+    if (isCaptchaNeeded) {
+      // If captcha is needed
+      this.echo('--- ALERT! CAPTCHA is requested ---');
+      this.capture('captcha.jpg', {
+        top: 484,
+        left: 17,
+        width: 131,
+        height: 42
+      });
+      var base64 = this.captureBase64('jpeg', {
+        top: 484,
+        left: 17,
+        width: 131,
+        height: 42
+      });
+      this.echo(base64);
 
-      page.open(api_url + '/in.php?key=' + api_key + '&method=base64&json=1&base64=' + base64, captcha_in_request, function (status) {
-        if (status !== 'success') {
-          this.echo('captcha page not opening');
-          isAnyErrorOccurred = true;
-        } else {
-          var resultObject = JSON.parse(page.plainText);
+      this.thenOpen(api_url + '/in.php?key=' + api_key + '&method=base64&json=1&body=' + base64, {
+        method: 'post',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8'
+        },
+        encoding: 'utf8',
+        data: base64
+      }, function (response) {
+        this.echo('response: ' + response.status);
+
+        if (response.status == 200) {
+          this.echo('this.page.plainText: ' + this.page.plainText);
+          var resultObject = JSON.parse(this.page.plainText);
           this.echo("Getting response from the captcha api server:");
-          if (resultObject['Status'] == '1') {
-            this.echo('SUCCESS');
+          this.echo(resultObject['status']);
+          if (resultObject['status'] == 1) {
+            this.echo('SUCCESS to get id from AZCaptcha');
             var capture_id = resultObject['request'], isReceivedCaptcha = false;
 
             do {
               // Make a 5 seconds timeout and submit a HTTP GET request to API URL providing the captcha ID.
-              casper.wait(5000);
+              this.wait(5000);
               // Request captcha
-              page.open(api_url + '/res.php?key=' + api_key + '&action=get&id=' + capture_id, captcha_res_request, function (status) {
-                if (status == 'success') {
-                  var resultObject = JSON.parse(page.plainText);
+              this.thenOpen(api_url + '/res.php?key=' + api_key + '&action=get&json=1&id=' + capture_id, {
+                method: 'get',
+                headers: {
+                  'Content-Type': 'application/json; charset=utf-8'
+                },
+                encoding: 'utf8'
+              }, function (response) {
+                if (response.status == 200) {
+                  var resultObject = JSON.parse(this.page.plainText);
                   this.echo("Getting response from the captcha api server:");
-                  if (resultObject['Status'] == '1') {
+                  if (resultObject['status'] == 1) {
                     this.echo('SUCCESS');
                     isReceivedCaptcha = true;
                     var capture_success = resultObject['request'];
@@ -170,17 +180,18 @@ if(!isAnyErrorOccurred) {
             }
             while (!isReceivedCaptcha);
           } else {
-            this.echo('FAILED');
+            this.echo(resultObject['request']);
           }
+        } else {
+          this.echo('captcha page not opening');
+          isAnyErrorOccurred = true;
         }
       });
     } else {
-      this.echo('Could not find the captcha');
+      // Send the activate code
+      sendActivateCode();
     }
-  } else {
-    // Send the activate code
-    sendActivateCode();
   }
-}
+});
 
 casper.run();
