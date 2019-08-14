@@ -2,6 +2,7 @@ var fs = require('fs'),
     casper = require("casper").create({
       exitOnError: false
     }),
+    x = require('casper').selectXPath,
     isCaptchaNeeded = false,
     isAnyErrorOccurred = false,
     api_url = "http://azcaptcha.com",
@@ -47,6 +48,8 @@ function send_activecode_with_captcha(captcha_text) {
       'input#captcha': captcha_text,
     }, true);
   });
+
+  casper.capture('capture-input.jpg');
 
   // Click continue button
   sendActivateCode();
@@ -118,6 +121,14 @@ casper.then(function() {
     if (isCaptchaNeeded) {
       // If captcha is needed
       this.echo('--- ALERT! CAPTCHA is requested ---');
+
+      // refresh captcha
+      this.thenClick(x('//img[contains(@src,"images/refresh-captcha.png")]'), function () {
+        this.echo("refresh captcha!");
+      });
+
+      this.wait(5000);
+
       this.capture('captcha.jpg', {
         top: 484,
         left: 17,
@@ -130,15 +141,17 @@ casper.then(function() {
         width: 131,
         height: 42
       });
-      this.echo(base64);
 
-      this.thenOpen(api_url + '/in.php?key=' + api_key + '&method=base64&json=1&body=' + base64, {
+      this.thenOpen(api_url + '/in.php', {
         method: 'post',
         headers: {
-          'Content-Type': 'application/json; charset=utf-8'
+          'Content-Type': 'multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW'
         },
-        encoding: 'utf8',
-        data: base64
+        data: "\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"key\"\r\n\r\n" + api_key + 
+        "\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"method\"\r\n\r\nbase64\r\n" + 
+        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"json\"\r\n\r\n1\r\n" + 
+        "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"body\"\r\n\r\n" + base64 + 
+        "\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--"
       }, function (response) {
         this.echo('response: ' + response.status);
 
@@ -151,34 +164,35 @@ casper.then(function() {
             this.echo('SUCCESS to get id from AZCaptcha');
             var capture_id = resultObject['request'], isReceivedCaptcha = false;
 
-            do {
-              // Make a 5 seconds timeout and submit a HTTP GET request to API URL providing the captcha ID.
-              this.wait(5000);
-              // Request captcha
-              this.thenOpen(api_url + '/res.php?key=' + api_key + '&action=get&json=1&id=' + capture_id, {
-                method: 'get',
-                headers: {
-                  'Content-Type': 'application/json; charset=utf-8'
-                },
-                encoding: 'utf8'
-              }, function (response) {
-                if (response.status == 200) {
-                  var resultObject = JSON.parse(this.page.plainText);
-                  this.echo("Getting response from the captcha api server:");
-                  if (resultObject['status'] == 1) {
-                    this.echo('SUCCESS');
-                    isReceivedCaptcha = true;
-                    var capture_success = resultObject['request'];
+            // Make a 5 seconds timeout and submit a HTTP GET request to API URL providing the captcha ID.
+            this.wait(5000);
+            // Request captcha
+            this.thenOpen(api_url + '/res.php?key=' + api_key + '&action=get&json=1&id=' + capture_id, {
+              method: 'get',
+              headers: {
+                'Content-Type': 'application/json; charset=utf-8'
+              },
+              encoding: 'utf8'
+            }, function (response) {
+              if (response.status == 200) {
+                var resultObject = JSON.parse(this.page.plainText);
+                this.echo("Getting response from the captcha api server:");
+                this.echo(this.page.plainText);
+                if (resultObject['status'] == 1) {
+                  this.echo('SUCCESS');
+                  isReceivedCaptcha = true;
+                  var capture_success = resultObject['request'];
 
-                    // Request with captcha
-                    send_activecode_with_captcha(capture_success);
-                  } else {
-                    this.echo('FAILED');
-                  }
+                  // Request with captcha
+                  send_activecode_with_captcha(capture_success);
+                } else {
+                  this.echo(resultObject['request']);
                 }
-              });
-            }
-            while (!isReceivedCaptcha);
+              }
+            });
+            // do {
+            // }
+            // while (!isReceivedCaptcha);
           } else {
             this.echo(resultObject['request']);
           }
