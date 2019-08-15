@@ -23,9 +23,9 @@ var fs = require('fs'),
 // Initialize casper
 casper.userAgent('Mozilla/5.0 (compatible; MSIE 6.0; Windows NT 5.1)');
 // listening to all resources requests
-casper.on("resource.requested", listener);
-// listening to all errors
-casper.on("resource.error", errorListener);
+// casper.on("resource.requested", listener);
+// // listening to all errors
+// casper.on("resource.error", errorListener);
 
 // Start casper
 casper.start();
@@ -47,23 +47,17 @@ casper.thenOpen('https://www.att.com/prepaid/activations/services/resources/acce
 casper.then(function (response) {
   if (response.status == 200) {
     var resultObject = JSON.parse(this.page.plainText);
-    this.echo("Getting response from the server:");
+    // this.echo("Getting response from the server:");
     if (resultObject['Result']['Status'] == 'SUCCESS') {
-      this.echo('SUCCESS');
+      // this.echo('SUCCESS');
       isCaptchaNeeded = resultObject['isCaptchaNeeded'];
-    } else {
-      this.echo('FAILED');
     }
-    this.echo('isCaptchaNeeded: ' + isCaptchaNeeded);
-  } else {
-    this.echo('page not opening');
+    // this.echo('isCaptchaNeeded: ' + isCaptchaNeeded);
   }
 });
 
 // load the start page
-casper.thenOpen('https://www.att.com/prepaid/activations/#/activate.html', function () {
-  this.echo(this.getTitle());
-});
+casper.thenOpen('https://www.att.com/prepaid/activations/#/activate.html');
 
 casper.then(function () {
   // Form input
@@ -76,32 +70,16 @@ casper.then(function () {
   });
 });
 
-casper.then(function() {
-  // Capture screen
-  this.capture('second.jpg');
-  this.echo('capture second screen');
-});
-
 casper.thenBypassIf(function () {
   return isCaptchaNeeded ==  false;
-}, 10);
+}, 9);
 
 // refresh captcha
-casper.thenClick(x('//img[contains(@src,"images/refresh-captcha.png")]'), function () {
-  this.echo("refresh captcha!");
-});
+casper.thenClick(x('//img[contains(@src,"images/refresh-captcha.png")]'));
 
-casper.wait(5000, function () {
-  this.echo("I've waited for 5 seconds.");
-});
+casper.wait(2000);
 
 casper.then(function() {
-  this.capture('captcha.jpg', {
-    top: 484,
-    left: 17,
-    width: 131,
-    height: 42
-  });
   var base64 = this.captureBase64('jpeg', {
     top: 484,
     left: 17,
@@ -120,15 +98,13 @@ casper.then(function() {
       "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"body\"\r\n\r\n" + base64 +
       "\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--"
   }, function (response) {
-    this.echo('response: ' + response.status);
-  
     if (response.status == 200) {
-      this.echo('this.page.plainText: ' + this.page.plainText);
+      // this.echo('this.page.plainText: ' + this.page.plainText);
       var resultObject = JSON.parse(this.page.plainText);
-      this.echo("Getting response from the captcha api server:");
-      this.echo(resultObject['status']);
+      // this.echo("Getting response from the captcha api server:");
+      // this.echo(resultObject['status']);
       if (resultObject['status'] == 1) {
-        this.echo('SUCCESS to get id from AZCaptcha');
+        // this.echo('SUCCESS to get id from AZCaptcha');
         var capture_id = resultObject['request'];
         
         // Make a 5 seconds timeout and submit a HTTP GET request to API URL providing the captcha ID.
@@ -144,36 +120,25 @@ casper.then(function() {
         }, function (response) {
           if (response.status == 200) {
             var resultObject = JSON.parse(this.page.plainText);
-            this.echo("Getting response from the captcha api server:");
-            this.echo(this.page.plainText);
+            // this.echo("Getting response from the captcha api server:");
+            // this.echo(this.page.plainText);
             if (resultObject['status'] == 1) {
-              this.echo('SUCCESS');
+              // this.echo('SUCCESS');
               isReceivedCaptcha = true;
               capture_text = resultObject['request'];
-
-            } else {
-              this.echo(resultObject['request']);
             }
           }
         });
-      } else {
-        this.echo(resultObject['request']);
       }
-    } else {
-      this.echo('captcha page not opening');
     }
   });
 });
 
-casper.back(function() {
-  this.echo(this.getCurrentUrl());
-});
+casper.back();
 
-casper.back(function() {
-  this.echo(this.getCurrentUrl());
-});
+casper.back();
 
-casper.wait(5000);
+casper.wait(3000);
 
 casper.then(function() {
   this.sendKeys('#captcha', capture_text);
@@ -182,21 +147,11 @@ casper.then(function() {
 casper.wait(500);
 
 casper.waitForSelector("#continueBtn", function () {
-  this.echo("I'm sure #continueBtn is available in the DOM");
+  // this.echo("I'm sure #continueBtn is available in the DOM");
 });
 
-casper.thenClick('#continueBtn', function () {
-  // Click continue button
-  this.echo('clicked continue button');
-});
+casper.thenClick('#continueBtn');
 
-casper.wait(5000);
-
-casper.then(function () {
-  // Capture the screen
-  this.capture('final.jpg');
-  // And exit
-  this.echo('capture final screen');
-});
+casper.wait(3000);
 
 casper.run();
